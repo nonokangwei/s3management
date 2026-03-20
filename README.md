@@ -131,14 +131,156 @@ docker run -p 8080:8080 \
   s3-gcs-proxy
 ```
 
-### Option 3: Deploy on GKE / Cloud Run
+### Option 3: Deploy on GKE
 
-For GKE or Cloud Run, use Workload Identity or an attached service account so no key file is needed:
+Use [Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity) so the proxy can access GCS without managing key files.
+
+**1. Set up Workload Identity**
 
 ```bash
-# Cloud Run example
+# Create a GCP service account
+gcloud iam service-accounts create s3-gcs-proxy \
+  --display-name="S3-GCS Proxy"
+
+# Grant GCS permissions
+gcloud projects add-iam-policy-binding my-gcp-project \
+  --member="serviceAccount:s3-gcs-proxy@my-gcp-project.iam.gserviceaccount.com" \
+  --role="roles/storage.admin"
+
+# Allow the Kubernetes service account to impersonate the GCP service account
+gcloud iam service-accounts add-iam-policy-binding \
+  s3-gcs-proxy@my-gcp-project.iam.gserviceaccount.com \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="serviceAccount:my-gcp-project.svc.id.goog[s3-gcs-proxy/s3-gcs-proxy]"
+```
+
+**2. Build and push the image**
+
+```bash
+docker build -t gcr.io/my-gcp-project/s3-gcs-proxy .
+docker push gcr.io/my-gcp-project/s3-gcs-proxy
+```
+
+**3. Apply Kubernetes manifests**
+
+```yaml
+# namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: s3-gcs-proxy
+---
+# serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: s3-gcs-proxy
+  namespace: s3-gcs-proxy
+  annotations:
+    iam.gke.io/gcp-service-account: s3-gcs-proxy@my-gcp-project.iam.gserviceaccount.com
+---
+# deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: s3-gcs-proxy
+  namespace: s3-gcs-proxy
+  labels:
+    app: s3-gcs-proxy
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: s3-gcs-proxy
+  template:
+    metadata:
+      labels:
+        app: s3-gcs-proxy
+    spec:
+      serviceAccountName: s3-gcs-proxy
+      containers:
+        - name: s3-gcs-proxy
+          image: gcr.io/my-gcp-project/s3-gcs-proxy:latest
+          args: ["--project", "my-gcp-project"]
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env:
+            - name: LISTEN_ADDR
+              value: ":8080"
+            - name: GCS_REQUEST_TIMEOUT
+              value: "30s"
+            - name: MAX_REQUEST_BODY_KB
+              value: "256"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+# service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: s3-gcs-proxy
+  namespace: s3-gcs-proxy
+spec:
+  selector:
+    app: s3-gcs-proxy
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+  type: ClusterIP
+```
+
+Deploy:
+
+```bash
+kubectl apply -f namespace.yaml
+kubectl apply -f serviceaccount.yaml
+kubectl apply -f deployment.yaml
+kubectl apply -f service.yaml
+```
+
+To expose externally, add an Ingress or change Service type to `LoadBalancer`:
+
+```yaml
+# service-lb.yaml (alternative)
+apiVersion: v1
+kind: Service
+metadata:
+  name: s3-gcs-proxy-lb
+  namespace: s3-gcs-proxy
+spec:
+  selector:
+    app: s3-gcs-proxy
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+  type: LoadBalancer
+```
+
+### Option 4: Deploy on Cloud Run
+
+```bash
 gcloud run deploy s3-gcs-proxy \
-  --image gcr.io/my-project/s3-gcs-proxy \
+  --image gcr.io/my-gcp-project/s3-gcs-proxy \
   --set-env-vars GCS_PROJECT_ID=my-gcp-project \
   --port 8080 \
   --allow-unauthenticated
