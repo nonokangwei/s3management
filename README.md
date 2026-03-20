@@ -323,6 +323,91 @@ go test -v ./...
 go test -v -run TestE2E .
 ```
 
+## Test Results
+
+**Overall: 45/45 PASSED**
+
+### Unit Tests — XML Parsing/Generation (`model`)
+
+| Test | Description | Result |
+|------|-------------|--------|
+| VersioningConfigurationXML/enabled | Parse `<Status>Enabled</Status>` and round-trip | ✅ |
+| VersioningConfigurationXML/suspended | Parse `<Status>Suspended</Status>` and round-trip | ✅ |
+| VersioningConfigurationXML/mfa_delete | Parse MfaDelete field | ✅ |
+| VersioningConfigurationXML/empty | Parse empty VersioningConfiguration | ✅ |
+| CORSConfigurationXML | Parse multi-origin, multi-method CORS rule with all fields | ✅ |
+| BucketLoggingStatusXML/enabled | Parse LoggingEnabled with TargetBucket/TargetPrefix | ✅ |
+| BucketLoggingStatusXML/disabled | Parse empty BucketLoggingStatus | ✅ |
+| TaggingXML | Parse TagSet with multiple tags and round-trip | ✅ |
+| VersioningConfigurationWithNamespace | Parse XML with S3 namespace | ✅ |
+| BucketLoggingWithTargetGrants | Parse logging XML containing TargetGrants | ✅ |
+
+### Unit Tests — S3/GCS Conversion (`converter`)
+
+| Test | Description | Result |
+|------|-------------|--------|
+| VersioningToGCS_Enabled | S3 `Enabled` → GCS `true` | ✅ |
+| VersioningToGCS_Suspended | S3 `Suspended` → GCS `false` | ✅ |
+| VersioningToGCS_MfaDeleteError | MfaDelete → rejected with error | ✅ |
+| VersioningToGCS_InvalidStatus | Invalid status string → error | ✅ |
+| VersioningFromGCS_Enabled | GCS `true` → S3 `Enabled` | ✅ |
+| VersioningFromGCS_Disabled | GCS `false` → S3 `Suspended` | ✅ |
+| CORSToGCS | S3 CORS → GCS CORS (Origins, Methods, ResponseHeaders, MaxAge) | ✅ |
+| CORSFromGCS | GCS CORS → S3 CORS (reverse mapping) | ✅ |
+| CORSToGCS_EmptyRules | Empty S3 CORS → empty GCS CORS slice | ✅ |
+| LoggingToGCS | S3 LoggingEnabled → GCS BucketLogging | ✅ |
+| LoggingToGCS_DisableLogging | Nil LoggingEnabled → empty GCS BucketLogging | ✅ |
+| LoggingToGCS_TargetGrantsError | TargetGrants → rejected with error | ✅ |
+| LoggingFromGCS | GCS BucketLogging → S3 LoggingEnabled | ✅ |
+| LoggingFromGCS_NoLogging | Nil GCS Logging → nil LoggingEnabled | ✅ |
+| TaggingToGCS | S3 Tags → GCS labels (with key lowercasing) | ✅ |
+| TaggingDeleteToGCS | Build delete-all-labels update | ✅ |
+| TaggingFromGCS | GCS labels → S3 Tags | ✅ |
+| TaggingFromGCS_NoLabels | Nil labels → empty TagSet | ✅ |
+
+### Unit Tests — Router (`server`)
+
+| Test | Description | Result |
+|------|-------------|--------|
+| ExtractBucketName_PathStyle/simple | `/mybucket` on `localhost:8080` | ✅ |
+| ExtractBucketName_PathStyle/trailing_slash | `/mybucket/` on `localhost:8080` | ✅ |
+| ExtractBucketName_PathStyle/query | `/mybucket` on `s3.amazonaws.com` | ✅ |
+| ExtractBucketName_VirtualHosted | `mybucket.s3.amazonaws.com` | ✅ |
+| ExtractBucketName_Empty | `/` on `localhost:8080` → empty | ✅ |
+
+### Integration Tests — Handlers with Mock GCS (`handler`)
+
+| Test | Description | Result |
+|------|-------------|--------|
+| GetVersioning | GET /?versioning → 200, XML with `Enabled` | ✅ |
+| PutVersioning_Enabled | PUT /?versioning with Enabled → 200 | ✅ |
+| PutVersioning_MfaDeleteError | PUT with MfaDelete → 400 InvalidArgument | ✅ |
+| PutVersioning_MalformedXML | PUT with invalid XML → 400 MalformedXML | ✅ |
+| GetVersioning_BucketNotFound | GET nonexistent bucket → 404 NoSuchBucket | ✅ |
+| GetCORS | GET /?cors → 200, XML with CORS rules | ✅ |
+| PutCORS | PUT /?cors → 200 | ✅ |
+| DeleteCORS | DELETE /?cors → 204 | ✅ |
+| GetLogging | GET /?logging → 200, XML with LoggingEnabled | ✅ |
+| PutLogging | PUT /?logging → 200 | ✅ |
+| PutLogging_TargetGrantsError | PUT with TargetGrants → 400 InvalidArgument | ✅ |
+| PutLogging_DisableLogging | PUT with empty BucketLoggingStatus → 200 | ✅ |
+| GetTagging | GET /?tagging → 200, XML with tags | ✅ |
+| PutTagging | PUT /?tagging → 200 | ✅ |
+| DeleteTagging | DELETE /?tagging → 204 | ✅ |
+| DeleteTagging_NoLabels | DELETE with no existing labels → 204 | ✅ |
+
+### End-to-End Tests — Real GCS Bucket with AWS S3 SDK v2
+
+E2E tests run against a real GCS bucket using the AWS S3 SDK v2 Go client through the proxy.
+
+| Test | Steps | Result |
+|------|-------|--------|
+| E2E_Versioning | Enable → GET (Enabled) → Suspend → GET (Suspended) | ✅ |
+| E2E_CORS | PUT 2 origins/methods → GET (verify) → DELETE → GET (empty) | ✅ |
+| E2E_Tagging | PUT 2 tags → GET (verify values) → DELETE → GET (empty) | ✅ |
+| E2E_Logging | PUT enable (bucket + prefix) → GET (verify) → PUT disable → GET (nil) | ✅ |
+| E2E_Versioning_MfaDeleteError | PUT with MfaDelete=Enabled → 400 InvalidArgument | ✅ |
+
 ## Project Structure
 
 ```
