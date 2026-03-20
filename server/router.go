@@ -8,6 +8,7 @@ import (
 
 	"github.com/kangwe/s3management/gcs"
 	"github.com/kangwe/s3management/handler"
+	"github.com/kangwe/s3management/observability"
 )
 
 // Router dispatches S3 API requests to the appropriate handler based on query parameters.
@@ -31,6 +32,8 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Missing bucket name", http.StatusBadRequest)
 		return
 	}
+
+	r = observability.EnsureRequestContext(r, "", bucket)
 
 	// Apply per-request GCS timeout so a slow backend doesn't block indefinitely
 	ctx, cancel := context.WithTimeout(r.Context(), rt.gcsRequestTimeout)
@@ -58,8 +61,10 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (rt *Router) handleVersioning(w http.ResponseWriter, r *http.Request, bucket string) {
 	switch r.Method {
 	case http.MethodGet:
+		r = observability.EnsureRequestContext(r, "versioning:get", bucket)
 		handler.GetVersioning(w, r, bucket, rt.client)
 	case http.MethodPut:
+		r = observability.EnsureRequestContext(r, "versioning:put", bucket)
 		handler.PutVersioning(w, r, bucket, rt.client)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -69,10 +74,13 @@ func (rt *Router) handleVersioning(w http.ResponseWriter, r *http.Request, bucke
 func (rt *Router) handleCORS(w http.ResponseWriter, r *http.Request, bucket string) {
 	switch r.Method {
 	case http.MethodGet:
+		r = observability.EnsureRequestContext(r, "cors:get", bucket)
 		handler.GetCORS(w, r, bucket, rt.client)
 	case http.MethodPut:
+		r = observability.EnsureRequestContext(r, "cors:put", bucket)
 		handler.PutCORS(w, r, bucket, rt.client)
 	case http.MethodDelete:
+		r = observability.EnsureRequestContext(r, "cors:delete", bucket)
 		handler.DeleteCORS(w, r, bucket, rt.client)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -83,8 +91,10 @@ func (rt *Router) handleLogging(w http.ResponseWriter, r *http.Request, bucket s
 	// S3 logging only supports GET and PUT. To disable logging, PUT with empty BucketLoggingStatus.
 	switch r.Method {
 	case http.MethodGet:
+		r = observability.EnsureRequestContext(r, "logging:get", bucket)
 		handler.GetLogging(w, r, bucket, rt.client)
 	case http.MethodPut:
+		r = observability.EnsureRequestContext(r, "logging:put", bucket)
 		handler.PutLogging(w, r, bucket, rt.client)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -94,10 +104,13 @@ func (rt *Router) handleLogging(w http.ResponseWriter, r *http.Request, bucket s
 func (rt *Router) handleTagging(w http.ResponseWriter, r *http.Request, bucket string) {
 	switch r.Method {
 	case http.MethodGet:
+		r = observability.EnsureRequestContext(r, "tagging:get", bucket)
 		handler.GetTagging(w, r, bucket, rt.client)
 	case http.MethodPut:
+		r = observability.EnsureRequestContext(r, "tagging:put", bucket)
 		handler.PutTagging(w, r, bucket, rt.client)
 	case http.MethodDelete:
+		r = observability.EnsureRequestContext(r, "tagging:delete", bucket)
 		handler.DeleteTagging(w, r, bucket, rt.client)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

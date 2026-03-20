@@ -4,6 +4,8 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/kangwe/s3management/observability"
 )
 
 // responseRecorder wraps http.ResponseWriter to capture the status code.
@@ -25,6 +27,12 @@ func RequestLog(next http.Handler) http.Handler {
 
 		next.ServeHTTP(rr, r)
 
-		log.Printf("%s %s -> %d (%s)", r.Method, r.URL.String(), rr.statusCode, time.Since(start).Round(time.Millisecond))
+		duration := time.Since(start).Round(time.Millisecond)
+		requestID := observability.RequestIDFromContext(r.Context())
+		op := observability.OperationFromContext(r.Context())
+		bucket := observability.BucketFromContext(r.Context())
+
+		log.Printf("req_id=%s method=%s path=%s bucket=%s operation=%s status=%d latency=%s", requestID, r.Method, r.URL.String(), bucket, op, rr.statusCode, duration)
+		observability.RecordRequest(op, bucket, rr.statusCode, duration)
 	})
 }

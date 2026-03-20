@@ -17,12 +17,12 @@ import (
 func GetVersioning(w http.ResponseWriter, r *http.Request, bucket string, client gcs.BucketOperator) {
 	attrs, err := client.GetBucketAttrs(r.Context(), bucket)
 	if err != nil {
-		handleGCSError(w, err, bucket)
+		handleGCSError(r.Context(), w, err, bucket, "versioning:get")
 		return
 	}
 
 	vc := converter.VersioningFromGCS(attrs)
-	writeXMLResponse(w, http.StatusOK, vc)
+	writeXMLResponse(r.Context(), w, http.StatusOK, vc)
 }
 
 // PutVersioning handles PUT /?versioning requests.
@@ -30,25 +30,25 @@ func GetVersioning(w http.ResponseWriter, r *http.Request, bucket string, client
 func PutVersioning(w http.ResponseWriter, r *http.Request, bucket string, client gcs.BucketOperator) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		model.WriteInternalError(w, "Failed to read request body")
+		model.WriteInternalError(r.Context(), w, "Failed to read request body")
 		return
 	}
 
 	var vc model.VersioningConfiguration
 	if err := xml.Unmarshal(body, &vc); err != nil {
 		log.Printf("Failed to parse versioning XML: %v", err)
-		model.WriteMalformedXML(w)
+		model.WriteMalformedXML(r.Context(), w)
 		return
 	}
 
 	update, err := converter.VersioningToGCS(&vc)
 	if err != nil {
-		model.WriteInvalidArgument(w, err.Error())
+		model.WriteInvalidArgument(r.Context(), w, err.Error())
 		return
 	}
 
 	if _, err := client.UpdateBucket(r.Context(), bucket, update); err != nil {
-		handleGCSError(w, err, bucket)
+		handleGCSError(r.Context(), w, err, bucket, "versioning:put")
 		return
 	}
 

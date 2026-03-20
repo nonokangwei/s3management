@@ -1,0 +1,268 @@
+openapi: 3.0.1
+info:
+  title: S3-to-GCS Management Proxy
+  version: "1.0.0"
+  description: >
+    Contract for the S3-compatible bucket management proxy. The actual wire
+    format uses S3-style query parameters (e.g., `/{bucket}?versioning`), but
+    the paths below are expressed with virtual subpaths for clarity.
+servers:
+  - url: http://localhost:8080
+paths:
+  /versioning/{bucket}:
+    get:
+      summary: Get bucket versioning
+      description: Proxies GET `/{bucket}?versioning`.
+      parameters:
+        - $ref: "#/components/parameters/Bucket"
+      responses:
+        "200":
+          description: S3 VersioningConfiguration XML
+          content:
+            application/xml:
+              schema:
+                $ref: "#/components/schemas/VersioningConfiguration"
+              example: |
+                <?xml version="1.0" encoding="UTF-8"?>
+                <VersioningConfiguration>
+                  <Status>Enabled</Status>
+                </VersioningConfiguration>
+        default:
+          $ref: "#/components/responses/S3Error"
+    put:
+      summary: Update bucket versioning
+      description: Proxies PUT `/{bucket}?versioning`.
+      parameters:
+        - $ref: "#/components/parameters/Bucket"
+      requestBody:
+        required: true
+        content:
+          application/xml:
+            schema:
+              $ref: "#/components/schemas/VersioningConfiguration"
+      responses:
+        "200":
+          description: Versioning updated
+        default:
+          $ref: "#/components/responses/S3Error"
+  /cors/{bucket}:
+    get:
+      summary: Get bucket CORS rules
+      description: Proxies GET `/{bucket}?cors`.
+      parameters:
+        - $ref: "#/components/parameters/Bucket"
+      responses:
+        "200":
+          description: S3 CORSConfiguration XML
+          content:
+            application/xml:
+              schema:
+                $ref: "#/components/schemas/CORSConfiguration"
+        default:
+          $ref: "#/components/responses/S3Error"
+    put:
+      summary: Update bucket CORS rules
+      description: Proxies PUT `/{bucket}?cors`.
+      parameters:
+        - $ref: "#/components/parameters/Bucket"
+      requestBody:
+        required: true
+        content:
+          application/xml:
+            schema:
+              $ref: "#/components/schemas/CORSConfiguration"
+      responses:
+        "200":
+          description: CORS updated
+        default:
+          $ref: "#/components/responses/S3Error"
+    delete:
+      summary: Delete bucket CORS rules
+      description: Proxies DELETE `/{bucket}?cors`.
+      parameters:
+        - $ref: "#/components/parameters/Bucket"
+      responses:
+        "204":
+          description: CORS removed
+        default:
+          $ref: "#/components/responses/S3Error"
+  /logging/{bucket}:
+    get:
+      summary: Get bucket logging
+      description: Proxies GET `/{bucket}?logging`.
+      parameters:
+        - $ref: "#/components/parameters/Bucket"
+      responses:
+        "200":
+          description: S3 BucketLoggingStatus XML
+          content:
+            application/xml:
+              schema:
+                $ref: "#/components/schemas/BucketLoggingStatus"
+        default:
+          $ref: "#/components/responses/S3Error"
+    put:
+      summary: Update bucket logging
+      description: Proxies PUT `/{bucket}?logging`.
+      parameters:
+        - $ref: "#/components/parameters/Bucket"
+      requestBody:
+        required: true
+        content:
+          application/xml:
+            schema:
+              $ref: "#/components/schemas/BucketLoggingStatus"
+      responses:
+        "200":
+          description: Logging updated
+        default:
+          $ref: "#/components/responses/S3Error"
+  /tagging/{bucket}:
+    get:
+      summary: Get bucket tags
+      description: Proxies GET `/{bucket}?tagging`.
+      parameters:
+        - $ref: "#/components/parameters/Bucket"
+      responses:
+        "200":
+          description: S3 Tagging XML
+          content:
+            application/xml:
+              schema:
+                $ref: "#/components/schemas/Tagging"
+        default:
+          $ref: "#/components/responses/S3Error"
+    put:
+      summary: Update bucket tags
+      description: Proxies PUT `/{bucket}?tagging`.
+      parameters:
+        - $ref: "#/components/parameters/Bucket"
+      requestBody:
+        required: true
+        content:
+          application/xml:
+            schema:
+              $ref: "#/components/schemas/Tagging"
+      responses:
+        "200":
+          description: Tags updated
+        default:
+          $ref: "#/components/responses/S3Error"
+    delete:
+      summary: Delete bucket tags
+      description: Proxies DELETE `/{bucket}?tagging`.
+      parameters:
+        - $ref: "#/components/parameters/Bucket"
+      responses:
+        "204":
+          description: Tags removed
+        default:
+          $ref: "#/components/responses/S3Error"
+components:
+  parameters:
+    Bucket:
+      name: bucket
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Target bucket name
+  responses:
+    S3Error:
+      description: S3-compatible error response
+      content:
+        application/xml:
+          schema:
+            $ref: "#/components/schemas/S3Error"
+  schemas:
+    VersioningConfiguration:
+      type: object
+      xml:
+        name: VersioningConfiguration
+      properties:
+        Status:
+          type: string
+          enum: [Enabled, Suspended]
+        MfaDelete:
+          type: string
+          description: Not supported by GCS
+    CORSConfiguration:
+      type: object
+      xml:
+        name: CORSConfiguration
+      properties:
+        CORSRule:
+          type: array
+          items:
+            $ref: "#/components/schemas/CORSRule"
+    CORSRule:
+      type: object
+      xml:
+        name: CORSRule
+      properties:
+        AllowedOrigin:
+          type: array
+          items:
+            type: string
+        AllowedMethod:
+          type: array
+          items:
+            type: string
+        AllowedHeader:
+          type: array
+          items:
+            type: string
+        ExposeHeader:
+          type: array
+          items:
+            type: string
+        MaxAgeSeconds:
+          type: integer
+    BucketLoggingStatus:
+      type: object
+      xml:
+        name: BucketLoggingStatus
+      properties:
+        LoggingEnabled:
+          $ref: "#/components/schemas/LoggingEnabled"
+    LoggingEnabled:
+      type: object
+      properties:
+        TargetBucket:
+          type: string
+        TargetPrefix:
+          type: string
+    Tagging:
+      type: object
+      xml:
+        name: Tagging
+      properties:
+        TagSet:
+          $ref: "#/components/schemas/TagSet"
+    TagSet:
+      type: object
+      properties:
+        Tag:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tag"
+    Tag:
+      type: object
+      properties:
+        Key:
+          type: string
+        Value:
+          type: string
+    S3Error:
+      type: object
+      xml:
+        name: Error
+      properties:
+        Code:
+          type: string
+        Message:
+          type: string
+        Resource:
+          type: string
+        RequestId:
+          type: string

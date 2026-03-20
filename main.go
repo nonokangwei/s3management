@@ -11,21 +11,24 @@ import (
 	"github.com/kangwe/s3management/config"
 	"github.com/kangwe/s3management/gcs"
 	"github.com/kangwe/s3management/middleware"
+	"github.com/kangwe/s3management/observability"
 	"github.com/kangwe/s3management/server"
 )
 
 func main() {
-	cfg := config.Load()
-
-	if cfg.GCSProjectID == "" {
-		log.Fatal("GCS project ID is required. Set GCS_PROJECT_ID env var or use --project flag.")
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("configuration error: %v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Initialize GCS client with Application Default Credentials
-	gcsClient, err := gcs.NewClient(ctx, cfg.GCSProjectID)
+	// Initialize GCS client with Application Default Credentials and startup timeout
+	clientCtx, clientCancel := context.WithTimeout(ctx, cfg.GCSRequestTimeout)
+	defer clientCancel()
+
+	gcsClient, err := gcs.NewClient(clientCtx, cfg.GCSProjectID)
 	if err != nil {
 		log.Fatalf("Failed to create GCS client: %v", err)
 	}
@@ -40,10 +43,13 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))
 	})
+	mux.Handle("/metrics", observability.MetricsHandler())
 	mux.Handle("/", middleware.Recovery(
-		middleware.RequestLog(
-			middleware.BodyLimit(cfg.MaxRequestBodyKB*1024)(
-				middleware.SignatureBypass(router),
+		middleware.RequestID(
+			middleware.RequestLog(
+				middleware.BodyLimit(cfg.MaxRequestBodyKB*1024)(
+					middleware.SignatureBypass(router),
+				),
 			),
 		),
 	))

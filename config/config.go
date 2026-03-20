@@ -1,9 +1,12 @@
 package config
 
 import (
+	"errors"
 	"flag"
+	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -22,19 +25,61 @@ type Config struct {
 
 // Load reads configuration from environment variables and command-line flags.
 // Flags take precedence over environment variables.
-func Load() *Config {
+func Load() (*Config, error) {
 	cfg := &Config{}
 
 	// Defaults from environment variables
+	var errs []string
+
 	cfg.ListenAddr = getEnv("LISTEN_ADDR", ":8080")
-	cfg.GCSProjectID = getEnv("GCS_PROJECT_ID", "")
-	cfg.LogLevel = getEnv("LOG_LEVEL", "info")
-	cfg.ReadTimeout = getDurationEnv("READ_TIMEOUT", 30*time.Second)
-	cfg.WriteTimeout = getDurationEnv("WRITE_TIMEOUT", 30*time.Second)
-	cfg.IdleTimeout = getDurationEnv("IDLE_TIMEOUT", 120*time.Second)
-	cfg.ShutdownTimeout = getDurationEnv("SHUTDOWN_TIMEOUT", 15*time.Second)
-	cfg.GCSRequestTimeout = getDurationEnv("GCS_REQUEST_TIMEOUT", 30*time.Second)
-	cfg.MaxRequestBodyKB = getInt64Env("MAX_REQUEST_BODY_KB", 256) // 256KB default, S3 CORS config max is 64KB
+	cfg.GCSProjectID = strings.TrimSpace(getEnv("GCS_PROJECT_ID", ""))
+	cfg.LogLevel = strings.ToLower(getEnv("LOG_LEVEL", "info"))
+
+	readTimeout, err := getDurationEnv("READ_TIMEOUT", 30*time.Second)
+	if err != nil {
+		errs = append(errs, fmt.Sprintf("READ_TIMEOUT: %v", err))
+	} else {
+		cfg.ReadTimeout = readTimeout
+	}
+
+	writeTimeout, err := getDurationEnv("WRITE_TIMEOUT", 30*time.Second)
+	if err != nil {
+		errs = append(errs, fmt.Sprintf("WRITE_TIMEOUT: %v", err))
+	} else {
+		cfg.WriteTimeout = writeTimeout
+	}
+
+	idleTimeout, err := getDurationEnv("IDLE_TIMEOUT", 120*time.Second)
+	if err != nil {
+		errs = append(errs, fmt.Sprintf("IDLE_TIMEOUT: %v", err))
+	} else {
+		cfg.IdleTimeout = idleTimeout
+	}
+
+	shutdownTimeout, err := getDurationEnv("SHUTDOWN_TIMEOUT", 15*time.Second)
+	if err != nil {
+		errs = append(errs, fmt.Sprintf("SHUTDOWN_TIMEOUT: %v", err))
+	} else {
+		cfg.ShutdownTimeout = shutdownTimeout
+	}
+
+	gcsTimeout, err := getDurationEnv("GCS_REQUEST_TIMEOUT", 30*time.Second)
+	if err != nil {
+		errs = append(errs, fmt.Sprintf("GCS_REQUEST_TIMEOUT: %v", err))
+	} else if gcsTimeout <= 0 {
+		errs = append(errs, "GCS_REQUEST_TIMEOUT must be greater than 0")
+	} else {
+		cfg.GCSRequestTimeout = gcsTimeout
+	}
+
+	maxBody, err := getInt64Env("MAX_REQUEST_BODY_KB", 256)
+	if err != nil {
+		errs = append(errs, fmt.Sprintf("MAX_REQUEST_BODY_KB: %v", err))
+	} else if maxBody <= 0 {
+		errs = append(errs, "MAX_REQUEST_BODY_KB must be greater than 0")
+	} else {
+		cfg.MaxRequestBodyKB = maxBody
+	}
 
 	// Command-line flags override environment variables
 	flag.StringVar(&cfg.ListenAddr, "addr", cfg.ListenAddr, "Listen address (host:port)")
@@ -42,7 +87,15 @@ func Load() *Config {
 	flag.StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "Log level: debug, info, warn, error")
 	flag.Parse()
 
-	return cfg
+	if cfg.GCSProjectID == "" {
+		errs = append(errs, "GCS project ID is required. Set GCS_PROJECT_ID env var or use --project flag")
+	}
+
+	if len(errs) > 0 {
+		return nil, errors.New(strings.Join(errs, "; "))
+	}
+
+	return cfg, nil
 }
 
 func getEnv(key, fallback string) string {
@@ -52,22 +105,24 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
-func getDurationEnv(key string, fallback time.Duration) time.Duration {
+func getDurationEnv(key string, fallback time.Duration) (time.Duration, error) {
 	if v := os.Getenv(key); v != "" {
 		d, err := time.ParseDuration(v)
 		if err == nil {
-			return d
+			return d, nil
 		}
+		return 0, fmt.Errorf("invalid duration %q", v)
 	}
-	return fallback
+	return fallback, nil
 }
 
-func getInt64Env(key string, fallback int64) int64 {
+func getInt64Env(key string, fallback int64) (int64, error) {
 	if v := os.Getenv(key); v != "" {
 		n, err := strconv.ParseInt(v, 10, 64)
 		if err == nil {
-			return n
+			return n, nil
 		}
+		return 0, fmt.Errorf("invalid integer %q", v)
 	}
-	return fallback
+	return fallback, nil
 }

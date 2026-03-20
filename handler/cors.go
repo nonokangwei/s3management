@@ -17,12 +17,12 @@ import (
 func GetCORS(w http.ResponseWriter, r *http.Request, bucket string, client gcs.BucketOperator) {
 	attrs, err := client.GetBucketAttrs(r.Context(), bucket)
 	if err != nil {
-		handleGCSError(w, err, bucket)
+		handleGCSError(r.Context(), w, err, bucket, "cors:get")
 		return
 	}
 
 	cc := converter.CORSFromGCS(attrs.CORS)
-	writeXMLResponse(w, http.StatusOK, cc)
+	writeXMLResponse(r.Context(), w, http.StatusOK, cc)
 }
 
 // PutCORS handles PUT /?cors requests.
@@ -30,14 +30,14 @@ func GetCORS(w http.ResponseWriter, r *http.Request, bucket string, client gcs.B
 func PutCORS(w http.ResponseWriter, r *http.Request, bucket string, client gcs.BucketOperator) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		model.WriteInternalError(w, "Failed to read request body")
+		model.WriteInternalError(r.Context(), w, "Failed to read request body")
 		return
 	}
 
 	var cc model.CORSConfiguration
 	if err := xml.Unmarshal(body, &cc); err != nil {
 		log.Printf("Failed to parse CORS XML: %v", err)
-		model.WriteMalformedXML(w)
+		model.WriteMalformedXML(r.Context(), w)
 		return
 	}
 
@@ -47,7 +47,7 @@ func PutCORS(w http.ResponseWriter, r *http.Request, bucket string, client gcs.B
 	}
 
 	if _, err := client.UpdateBucket(r.Context(), bucket, update); err != nil {
-		handleGCSError(w, err, bucket)
+		handleGCSError(r.Context(), w, err, bucket, "cors:put")
 		return
 	}
 
@@ -62,7 +62,7 @@ func DeleteCORS(w http.ResponseWriter, r *http.Request, bucket string, client gc
 	}
 
 	if _, err := client.UpdateBucket(r.Context(), bucket, update); err != nil {
-		handleGCSError(w, err, bucket)
+		handleGCSError(r.Context(), w, err, bucket, "cors:delete")
 		return
 	}
 
