@@ -33,8 +33,6 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r = observability.EnsureRequestContext(r, "", bucket)
-
 	// Apply per-request GCS timeout so a slow backend doesn't block indefinitely
 	ctx, cancel := context.WithTimeout(r.Context(), rt.gcsRequestTimeout)
 	defer cancel()

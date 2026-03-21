@@ -3,6 +3,7 @@ package observability
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -77,7 +78,7 @@ func BucketFromContext(ctx context.Context) string {
 
 // RecordRequest captures latency with operation/bucket/status labels.
 func RecordRequest(operation, bucket string, status int, duration time.Duration) {
-	requestLatency.WithLabelValues(operation, bucket, http.StatusText(status)).Observe(duration.Seconds())
+	requestLatency.WithLabelValues(operation, bucket, strconv.Itoa(status)).Observe(duration.Seconds())
 }
 
 // RecordUpstreamError increments the upstream error counter.
