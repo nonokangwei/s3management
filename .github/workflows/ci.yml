@@ -39,5 +39,5 @@ jobs:
 
       - name: Govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.0
           govulncheck ./...
