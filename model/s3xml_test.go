@@ -9,10 +9,10 @@ import (
 // Test XML round-trip for VersioningConfiguration
 func TestVersioningConfigurationXML(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		status   string
-		mfaDel   string
+		name   string
+		input  string
+		status string
+		mfaDel string
 	}{
 		{
 			name:   "versioning enabled",

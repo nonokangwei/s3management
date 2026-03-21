@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CORSConfiguration>
+  <CORSRule>
+    <AllowedMethod>GET</AllowedMethod>
+    <AllowedMethod>POST</AllowedMethod>
+    <AllowedOrigin>http://example.com</AllowedOrigin>
+    <ExposeHeader>X-Test</ExposeHeader>
+    <MaxAgeSeconds>3600</MaxAgeSeconds>
+  </CORSRule>
+</CORSConfiguration>

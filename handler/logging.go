@@ -16,12 +16,12 @@ import (
 func GetLogging(w http.ResponseWriter, r *http.Request, bucket string, client gcs.BucketOperator) {
 	attrs, err := client.GetBucketAttrs(r.Context(), bucket)
 	if err != nil {
-		handleGCSError(w, err, bucket)
+		handleGCSError(r.Context(), w, err, bucket, "logging:get")
 		return
 	}
 
 	ls := converter.LoggingFromGCS(attrs)
-	writeXMLResponse(w, http.StatusOK, ls)
+	writeXMLResponse(r.Context(), w, http.StatusOK, ls)
 }
 
 // PutLogging handles PUT /?logging requests.
@@ -29,25 +29,25 @@ func GetLogging(w http.ResponseWriter, r *http.Request, bucket string, client gc
 func PutLogging(w http.ResponseWriter, r *http.Request, bucket string, client gcs.BucketOperator) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		model.WriteInternalError(w, "Failed to read request body")
+		model.WriteInternalError(r.Context(), w, "Failed to read request body")
 		return
 	}
 
 	var ls model.BucketLoggingStatus
 	if err := xml.Unmarshal(body, &ls); err != nil {
 		log.Printf("Failed to parse logging XML: %v", err)
-		model.WriteMalformedXML(w)
+		model.WriteMalformedXML(r.Context(), w)
 		return
 	}
 
 	update, err := converter.LoggingToGCS(&ls)
 	if err != nil {
-		model.WriteInvalidArgument(w, err.Error())
+		model.WriteInvalidArgument(r.Context(), w, err.Error())
 		return
 	}
 
 	if _, err := client.UpdateBucket(r.Context(), bucket, update); err != nil {
-		handleGCSError(w, err, bucket)
+		handleGCSError(r.Context(), w, err, bucket, "logging:put")
 		return
 	}
 

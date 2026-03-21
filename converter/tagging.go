@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"sort"
 	"strings"
 
 	"cloud.google.com/go/storage"
@@ -32,10 +33,16 @@ func TaggingDeleteToGCS(currentLabels map[string]string) storage.BucketAttrsToUp
 // TaggingFromGCS converts GCS bucket labels to S3 Tagging format.
 func TaggingFromGCS(attrs *storage.BucketAttrs) *model.Tagging {
 	t := &model.Tagging{}
-	for key, value := range attrs.Labels {
+	keys := make([]string, 0, len(attrs.Labels))
+	for key := range attrs.Labels {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
 		t.TagSet.Tag = append(t.TagSet.Tag, model.Tag{
 			Key:   key,
-			Value: value,
+			Value: attrs.Labels[key],
 		})
 	}
 	return t

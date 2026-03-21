@@ -21,6 +21,16 @@ This allows teams already using S3 SDKs or tooling (such as AWS CLI, Terraform A
 | Bucket Logging | GET, PUT | `?logging` |
 | Bucket Tagging | GET, PUT, DELETE | `?tagging` |
 
+### Compatibility Matrix (S3 ↔︎ GCS)
+
+| API | Support | Notes / Known Differences |
+| --- | --- | --- |
+| Versioning | Supported | `MfaDelete` is rejected with `InvalidArgument`; maps to GCS `VersioningEnabled` boolean. |
+| CORS | Supported | `AllowedHeader` accepted but ignored (GCS allows all request headers); `ID` dropped. |
+| Logging | Partial | `TargetGrants` not supported; same bucket can be used as log target. |
+| Tagging | Supported | Keys lowercased to satisfy GCS label constraints; deleting tags removes all labels. |
+| Error model | Supported | Centralized GCS→S3 mapping; responses include `RequestId` and S3 XML envelope. |
+
 ### S3 to GCS Field Mapping
 
 | S3 Field | GCS Equivalent | Notes |
@@ -37,6 +47,38 @@ This allows teams already using S3 SDKs or tooling (such as AWS CLI, Terraform A
 | Logging `TargetPrefix` | `LogObjectPrefix` | |
 | Logging `TargetGrants` | Not supported | Returns `InvalidArgument` error |
 | Tagging `Tag` (Key/Value) | Labels (key/value) | Keys are automatically lowercased |
+
+### Contract Docs
+
+- OpenAPI: `docs/openapi.yaml` documents every operation with schemas for XML payloads and S3 errors.
+- Metrics: `/metrics` exposes Prometheus metrics (`s3_proxy_request_latency_seconds`, `s3_proxy_upstream_errors_total`).
+- Request correlation: every response includes `X-Request-ID`; S3 error payloads echo this as `RequestId`.
+
+#### cURL Examples (real wire paths)
+
+```bash
+# Versioning
+curl -H "X-Request-ID: demo-1" -X GET  http://localhost:8080/my-bucket?versioning
+curl -H "Content-Type: application/xml" -d '<VersioningConfiguration><Status>Enabled</Status></VersioningConfiguration>' \
+  -X PUT http://localhost:8080/my-bucket?versioning
+
+# CORS
+curl -X GET http://localhost:8080/my-bucket?cors
+curl -H "Content-Type: application/xml" -d '<CORSConfiguration><CORSRule><AllowedOrigin>*</AllowedOrigin><AllowedMethod>GET</AllowedMethod></CORSRule></CORSConfiguration>' \
+  -X PUT http://localhost:8080/my-bucket?cors
+curl -X DELETE http://localhost:8080/my-bucket?cors
+
+# Logging
+curl -X GET http://localhost:8080/my-bucket?logging
+curl -H "Content-Type: application/xml" -d '<BucketLoggingStatus><LoggingEnabled><TargetBucket>logs</TargetBucket><TargetPrefix>prefix/</TargetPrefix></LoggingEnabled></BucketLoggingStatus>' \
+  -X PUT http://localhost:8080/my-bucket?logging
+
+# Tagging
+curl -X GET http://localhost:8080/my-bucket?tagging
+curl -H "Content-Type: application/xml" -d '<Tagging><TagSet><Tag><Key>env</Key><Value>prod</Value></Tag></TagSet></Tagging>' \
+  -X PUT http://localhost:8080/my-bucket?tagging
+curl -X DELETE http://localhost:8080/my-bucket?tagging
+```
 
 ## Architecture
 
@@ -70,6 +112,14 @@ The proxy supports both S3 addressing styles:
 - **Virtual-hosted style**: `http://my-bucket.proxy:8080/?versioning`
 
 S3 v4 signatures are detected but intentionally not validated (per design).
+
+## Operations, Observability, and Config Hardening
+
+- **Request IDs**: Every response includes `X-Request-ID`; errors echo this value inside the XML body for correlation.
+- **Metrics**: Prometheus scrape endpoint at `/metrics` with latency histograms and upstream GCS error counters labeled by operation/bucket.
+- **Timeouts**: Per-request GCS calls are wrapped in `GCS_REQUEST_TIMEOUT` (default 30s); startup enforces a non-zero timeout and fails fast on invalid env vars.
+- **Config validation**: All env vars are strictly parsed at startup; missing or malformed values abort the process with a clear message.
+- **Health**: `/healthz` returns `200 OK` when the process is alive.
 
 ## Prerequisites
 
@@ -130,6 +180,11 @@ docker run -p 8080:8080 \
   -e GOOGLE_APPLICATION_CREDENTIALS=/creds.json \
   s3-gcs-proxy
 ```
+
+## CI and Security Notes
+
+- CI runs `go test ./...`, `go test -race ./...`, `go vet ./...`, and `govulncheck ./...` on pull requests.
+- Security/operations: Dependabot opened **Bump google.golang.org/grpc from 1.79.2 to 1.79.3** (includes upstream security fixes). Merge once CI passes.
 
 ### Option 3: Deploy on GKE
 

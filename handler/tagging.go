@@ -16,12 +16,12 @@ import (
 func GetTagging(w http.ResponseWriter, r *http.Request, bucket string, client gcs.BucketOperator) {
 	attrs, err := client.GetBucketAttrs(r.Context(), bucket)
 	if err != nil {
-		handleGCSError(w, err, bucket)
+		handleGCSError(r.Context(), w, err, bucket, "tagging:get")
 		return
 	}
 
 	t := converter.TaggingFromGCS(attrs)
-	writeXMLResponse(w, http.StatusOK, t)
+	writeXMLResponse(r.Context(), w, http.StatusOK, t)
 }
 
 // PutTagging handles PUT /?tagging requests.
@@ -29,21 +29,21 @@ func GetTagging(w http.ResponseWriter, r *http.Request, bucket string, client gc
 func PutTagging(w http.ResponseWriter, r *http.Request, bucket string, client gcs.BucketOperator) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		model.WriteInternalError(w, "Failed to read request body")
+		model.WriteInternalError(r.Context(), w, "Failed to read request body")
 		return
 	}
 
 	var t model.Tagging
 	if err := xml.Unmarshal(body, &t); err != nil {
 		log.Printf("Failed to parse tagging XML: %v", err)
-		model.WriteMalformedXML(w)
+		model.WriteMalformedXML(r.Context(), w)
 		return
 	}
 
 	update := converter.TaggingToGCS(&t)
 
 	if _, err := client.UpdateBucket(r.Context(), bucket, update); err != nil {
-		handleGCSError(w, err, bucket)
+		handleGCSError(r.Context(), w, err, bucket, "tagging:put")
 		return
 	}
 
@@ -56,7 +56,7 @@ func DeleteTagging(w http.ResponseWriter, r *http.Request, bucket string, client
 	// First fetch current labels to know which keys to delete
 	attrs, err := client.GetBucketAttrs(r.Context(), bucket)
 	if err != nil {
-		handleGCSError(w, err, bucket)
+		handleGCSError(r.Context(), w, err, bucket, "tagging:delete")
 		return
 	}
 
@@ -68,7 +68,7 @@ func DeleteTagging(w http.ResponseWriter, r *http.Request, bucket string, client
 	update := converter.TaggingDeleteToGCS(attrs.Labels)
 
 	if _, err := client.UpdateBucket(r.Context(), bucket, update); err != nil {
-		handleGCSError(w, err, bucket)
+		handleGCSError(r.Context(), w, err, bucket, "tagging:delete")
 		return
 	}
 

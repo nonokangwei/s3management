@@ -1,9 +1,13 @@
 package model
 
 import (
+	"context"
 	"encoding/xml"
 	"fmt"
 	"net/http"
+
+	"github.com/google/uuid"
+	"github.com/kangwe/s3management/observability"
 )
 
 // S3Error represents an S3-compatible XML error response.
@@ -16,12 +20,16 @@ type S3Error struct {
 }
 
 // WriteS3Error writes an S3-compatible XML error response to the HTTP response writer.
-func WriteS3Error(w http.ResponseWriter, code string, message string, httpStatus int, resource string) {
+func WriteS3Error(ctx context.Context, w http.ResponseWriter, code string, message string, httpStatus int, resource string) {
+	requestID := observability.RequestIDFromContext(ctx)
+	if requestID == "" {
+		requestID = uuid.NewString()
+	}
 	s3Err := S3Error{
 		Code:      code,
 		Message:   message,
 		Resource:  resource,
-		RequestId: "00000000-0000-0000-0000-000000000000", // Placeholder request ID
+		RequestId: requestID,
 	}
 	body, err := xml.MarshalIndent(s3Err, "", "  ")
 	if err != nil {
@@ -35,22 +43,22 @@ func WriteS3Error(w http.ResponseWriter, code string, message string, httpStatus
 
 // Common S3 error constructors
 
-func WriteNoSuchBucket(w http.ResponseWriter, bucket string) {
-	WriteS3Error(w, "NoSuchBucket", "The specified bucket does not exist", http.StatusNotFound, bucket)
+func WriteNoSuchBucket(ctx context.Context, w http.ResponseWriter, bucket string) {
+	WriteS3Error(ctx, w, "NoSuchBucket", "The specified bucket does not exist", http.StatusNotFound, bucket)
 }
 
-func WriteInvalidArgument(w http.ResponseWriter, message string) {
-	WriteS3Error(w, "InvalidArgument", message, http.StatusBadRequest, "")
+func WriteInvalidArgument(ctx context.Context, w http.ResponseWriter, message string) {
+	WriteS3Error(ctx, w, "InvalidArgument", message, http.StatusBadRequest, "")
 }
 
-func WriteMalformedXML(w http.ResponseWriter) {
-	WriteS3Error(w, "MalformedXML", "The XML you provided was not well-formed or did not validate against our published schema", http.StatusBadRequest, "")
+func WriteMalformedXML(ctx context.Context, w http.ResponseWriter) {
+	WriteS3Error(ctx, w, "MalformedXML", "The XML you provided was not well-formed or did not validate against our published schema", http.StatusBadRequest, "")
 }
 
-func WriteAccessDenied(w http.ResponseWriter) {
-	WriteS3Error(w, "AccessDenied", "Access Denied", http.StatusForbidden, "")
+func WriteAccessDenied(ctx context.Context, w http.ResponseWriter) {
+	WriteS3Error(ctx, w, "AccessDenied", "Access Denied", http.StatusForbidden, "")
 }
 
-func WriteInternalError(w http.ResponseWriter, message string) {
-	WriteS3Error(w, "InternalError", message, http.StatusInternalServerError, "")
+func WriteInternalError(ctx context.Context, w http.ResponseWriter, message string) {
+	WriteS3Error(ctx, w, "InternalError", message, http.StatusInternalServerError, "")
 }

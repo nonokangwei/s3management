@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<BucketLoggingStatus>
+  <LoggingEnabled>
+    <TargetBucket>logs-bucket</TargetBucket>
+    <TargetPrefix>prefix/</TargetPrefix>
+  </LoggingEnabled>
+</BucketLoggingStatus>

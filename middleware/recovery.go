@@ -15,7 +15,7 @@ func Recovery(next http.Handler) http.Handler {
 		defer func() {
 			if rec := recover(); rec != nil {
 				log.Printf("PANIC recovered: %v\n%s", rec, debug.Stack())
-				model.WriteInternalError(w, "Internal server error")
+				model.WriteInternalError(r.Context(), w, "Internal server error")
 			}
 		}()
 		next.ServeHTTP(w, r)

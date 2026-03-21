@@ -28,7 +28,7 @@ func setupE2E(t *testing.T) (*s3.Client, *httptest.Server, func()) {
 	// Create a real GCS client using Application Default Credentials
 	gcsClient, err := gcs.NewClient(ctx, "")
 	if err != nil {
-		t.Fatalf("Failed to create GCS client: %v", err)
+		t.Skipf("Skipping E2E tests: %v", err)
 	}
 
 	// Start proxy server with 30s GCS request timeout
